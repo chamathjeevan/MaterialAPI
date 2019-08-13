@@ -123,7 +123,7 @@ router.put('/incoterm', function(req, res) {
             return res.status(400).send();
         }
 
-        dbConnection.query("UPDATE BRIDGE.Incoterms SET Incorterm = ?, Description = ?, Status = ? WHERE ID = ?", [incoterm.Incorterm, incoterm.Description, incoterm.Status, incoterm.ID], function(error, results, fields) {
+        dbConnection.query("UPDATE Incoterms SET Incorterm = ?, Description = ?, Status = ? WHERE ID = ?", [incoterm.Incorterm, incoterm.Description, incoterm.Status, incoterm.ID], function(error, results, fields) {
 
             if (error) return next(error);
 

@@ -7,6 +7,8 @@ app.use(bodyParser.urlencoded({
     extended: true
 }));
 app.use(cors())
+
+
 const materialRoutes = require('./routers/materials.js')
 app.use(materialRoutes);
 
