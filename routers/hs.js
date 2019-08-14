@@ -17,7 +17,34 @@ router.get('/:Client_ID/hs/:id', function (req, res, next) {
     dbConnection.query('SELECT * FROM HsCodes WHERE Client_ID = ? AND HsCode = ? ', [req.params.Client_ID, req.params.id], function (error, results, fields) {
         if (error) return next(error);
         if (!results || results.length == 0) return res.status(404).send();
-        return res.send(results)
+
+        var hsCode = {
+            HsCode: results[0].HsCode,
+            Description: results[0].Description,
+            Unit: results[0].Unit,
+            GenDuty: results[0].GenDuty,
+            VAT: results[0].VAT,
+            PAL: results[0].PAL,
+            NTB: results[0].NTB,
+            Cess: results[0].Cess,
+            Excise: results[0].Excise,
+            SCL: results[0].SCL,
+            MType: results[0].MType,
+            Countries: []
+        }
+
+        dbConnection.query('SELECT HsCountries.Country FROM HsCountries INNER JOIN HsCodes ON HsCountries.HsCode = HsCodes.HsCode WHERE HsCodes.Client_ID = ? AND HsCodes.HsCode = ?', [req.params.Client_ID, req.params.id], function (error, countryResults, fields) {
+            if (error) return next(error);
+            if (!countryResults || countryResults.length == 0) return res.send(hsCode);
+ 
+            countryResults.forEach(extract);
+
+            function extract(item, index) {
+                hsCode.Countries.push(item.Country);
+            }
+
+            return res.send(hsCode)
+        })
     })
 })
 
@@ -42,15 +69,13 @@ router.put('/:Client_ID/hs/', function (req, res, next) {
         if (err) {
             return res.status(400).send;
         }
-
-
         let hs = req.body;
         let userID = req.header('InitiatedBy')
         let Client_ID = req.header('Client_ID')
         let Countries = req.body.Countries;
 
         dbConnection.query("UPDATE HsCodes SET Description = ? , Unit = ? , GenDuty = ? , VAT = ? , PAL = ? , NTB = ? , Cess = ? ,Excise = ? ,SCL = ? , MType = ? , CreatedBy = ? WHERE HsCode = ? AND Client_ID = ? ", [hs.Description, hs.Unit, hs.GenDuty, hs.VAT, hs.PAL, hs.NTB, hs.Cess, hs.Excise, hs.SCL, hs.MType, userID, hs.HsCode, Client_ID], function (error, results, fields) {
-            console.error('====> 4');
+
             if (error) return next(error);
 
             if (!results || results.affectedRows == 0) return res.status(404).send();
@@ -124,6 +149,7 @@ router.post('/:Client_ID/hs/', function (req, res) {
             MType: hs.MType,
             CreatedBy: userID
         }
+
         dbConnection.query("INSERT INTO HsCodes SET ? ", hsCodeObj, function (error, results, fields) {
             if (error) {
                 console.error(error);
