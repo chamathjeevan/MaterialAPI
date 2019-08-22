@@ -3,31 +3,30 @@ const router = express.Router();
 var dbConnection = require('./database');
 const Joi = require('@hapi/joi');
 
-router.get ('/:Client_ID/regapproval', function(req,res,next) {
- 
-    dbConnection.query('SELECT * FROM RegulatoryApproval WHERE Client_ID = ? AND IsActive = 1',req.params.Client_ID ,function (error, results, fields) {
+router.get('/:Client_ID/regapproval', function (req, res, next) {
+
+    dbConnection.query('SELECT * FROM RegulatoryApproval WHERE Client_ID = ? AND IsActive = 1', req.params.Client_ID, function (error, results, fields) {
         if (error) return next(error);
-        if (!results || results.length == 0 ) return res.status(404).send()
+        if (!results || results.length == 0) return res.status(404).send()
         return res.send(results)
     });
 });
 
-router.get('/:Client_ID/regapproval/:id', function(req, res) {
+router.get('/:Client_ID/regapproval/:id', function (req, res) {
 
-    dbConnection.query('SELECT * FROM RegulatoryApproval WHERE Client_ID = ? AND IsActive = 1 AND ID = ? ',[req.params.Client_ID,req.params.id], function(error, results, fields) {
+    dbConnection.query('SELECT * FROM RegulatoryApproval WHERE Client_ID = ? AND IsActive = 1 AND ID = ? ', [req.params.Client_ID, req.params.id], function (error, results, fields) {
         if (error) return next(error);
 
         if (!results || results.length == 0) return res.status(404).send()
 
         return res.send(results);
     });
-
 });
 
 
-router.post('/:Client_ID/regapproval', function(req, res) {
+router.post('/:Client_ID/regapproval', function (req, res) {
     let regApproval = req.body;
-   
+
     if (!regApproval) {
         res.status(400).send({
             error: true,
@@ -40,8 +39,9 @@ router.post('/:Client_ID/regapproval', function(req, res) {
     const uuidv4 = require('uuid/v4')
     let userID = req.header('InitiatedBy')
     let clientID = req.header('Client_ID')
-    let APPROVAL_ID =  uuidv4();
+    let APPROVAL_ID = uuidv4();
 
+    var attachments = regApproval.Attachments
     var approvall = {
         ID: APPROVAL_ID,
         Client_ID: clientID,
@@ -52,50 +52,53 @@ router.post('/:Client_ID/regapproval', function(req, res) {
         AverageReleaseTime: regApproval.AverageReleaseTime,
         ObtainingStage: regApproval.ObtainingStage,
         IsActive: 1,
-        CreatedBy:userID
+        CreatedBy: userID
     }
 
-    let attachment = {  RegulatoryApproval_ID:APPROVAL_ID,
-                        DocumentName: regApproval.Attachments[0].DocumentName,
-                        Description: regApproval.Attachments[0].Description,
-                        Mandatory: regApproval.Attachments[0].Mandatory}
+    dbConnection.query("INSERT INTO RegulatoryApproval SET ? ", approvall, function (error, results, fields) {
 
-    dbConnection.query("INSERT INTO RegulatoryApproval SET ? ", approvall, function(error, results, fields) {
         if (error) {
             res.status(500).send(error);
-            console.error(error);
         } else {
-
             if (!results || results.length == 0) {
                 res.status(404).send();
             } else {
+                if (attachments && attachments.length > 0) {
 
-                dbConnection.query("INSERT INTO RegulatoryAttachments SET ? ", attachment, function(error1, results, fields) {
-                    if (error) {
-                        console.error(error1);
-                        res.status(500).send(error1);
-                    } else {
-                        if (!results || results.length == 0) {
-                            res.status(404).send();
-                        } else {
-                            res.status(201).send({
-                                error: false,
-                                data: results,
-                                message: 'New regulatory approval has been created successfully.'
-                            });
+                    for (var k = 0; k < attachments.length; k++) {
+
+                        let attachment = {
+                            RegulatoryApproval_ID: APPROVAL_ID,
+                            DocumentName: attachments[k].DocumentName,
+                            Description: attachments[k].Description,
+                            Mandatory: attachments[k].Mandatory
                         }
+
+                        dbConnection.query("INSERT INTO RegulatoryAttachments SET ? ", attachment, function (error1, results, fields) {
+                            if (error) {
+                                console.error(error1);
+                            }
+                        });
                     }
-                    res.end();
-                    return
-                });
+                  return res.status(201).send({
+                        error: false,
+                        data: results,
+                        message: 'New regulatory approval has been created successfully.'
+                    });
+                } else {
+
+                    return res.status(201).send({
+                        error: false,
+                        data: results,
+                        message: 'New regulatory approval has been created successfully.'
+                    });
+                }
             }
         }
-        res.end();
-        return
     });
 });
 
-router.put('/regapproval', function(req, res) {
+router.put('/regapproval', function (req, res) {
 
     let regApproval = req.body;
     let ParentID = regApproval.ID;
@@ -110,49 +113,54 @@ router.put('/regapproval', function(req, res) {
     }
 
     /* Begin transaction */
-    dbConnection.beginTransaction(function(err) {
+    dbConnection.beginTransaction(function (err) {
         if (err) {
             throw err;
         }
 
-        dbConnection.query("UPDATE BRIDGE.RegulatoryApproval SET  IsActive = 0 WHERE ID = ? ", ParentID, function(error, results, fields) {
+        dbConnection.query("UPDATE BRIDGE.RegulatoryApproval SET  IsActive = 0 WHERE ID = ? ", ParentID, function (error, results, fields) {
             if (error) {
-                dbConnection.rollback(function() {
+                dbConnection.rollback(function () {
 
                     res.status(500).send(error);
                     res.end();
                     return
                 });
             }
-            
+
+            const uuidv4 = require('uuid/v4')
             let userID = req.header('InitiatedBy')
-     
+            let clientID = req.header('Client_ID')
+            let APPROVAL_ID = uuidv4();
+       
+
             var copyRegApprovall = {
-                ApprovalType: regApproval.ApprovalType,
-                ApprovalObtainingStage: regApproval.ApprovalObtainingStage,
+                ID: APPROVAL_ID,
+                Client_ID: clientID,
                 Institute: regApproval.Institute,
-                Reference: regApproval.Reference,
-                SampleRequired: regApproval.SampleRequired,
+                TestName: regApproval.TestName,
                 ReleaseTimeInDays: regApproval.ReleaseTimeInDays,
+                SampleRequired: regApproval.SampleRequired,
+                AverageReleaseTime: regApproval.AverageReleaseTime,
+                ObtainingStage: regApproval.ObtainingStage,
                 IsActive: 1,
-                Parent_ID: ParentID,
                 CreatedBy: userID
             }
 
-            dbConnection.query("INSERT INTO BRIDGE.RegulatoryApproval SET ID = uuid(), ? ", copyRegApprovall, function(error, results, fields) {
+            dbConnection.query("INSERT INTO BRIDGE.RegulatoryApproval SET ID = uuid(), ? ", copyRegApprovall, function (error, results, fields) {
 
                 console.log(error);
 
                 if (error) {
-                    dbConnection.rollback(function() {
+                    dbConnection.rollback(function () {
                         res.status(500).send(error);
                         res.end();
                         return
                     });
                 }
-                dbConnection.commit(function(err) {
+                dbConnection.commit(function (err) {
                     if (error) {
-                        dbConnection.rollback(function() {
+                        dbConnection.rollback(function () {
                             res.status(500).send(error);
                             res.end();
                             return
@@ -176,7 +184,7 @@ router.put('/regapproval', function(req, res) {
 
 });
 
-router.delete('/regapproval/:id', function(req, res) {
+router.delete('/regapproval/:id', function (req, res) {
 
     let regapproval_id = req.params.id;
 
@@ -189,7 +197,7 @@ router.delete('/regapproval/:id', function(req, res) {
         return
     }
 
-    dbConnection.query("UPDATE BRIDGE.RegulatoryApproval SET  IsDeleted = 1 WHERE ID = ?", [regapproval_id], function(error, results, fields) {
+    dbConnection.query("UPDATE BRIDGE.RegulatoryApproval SET  IsDeleted = 1 WHERE ID = ?", [regapproval_id], function (error, results, fields) {
 
         if (error) {
             res.status(500).send(error);
