@@ -49,7 +49,7 @@ router.get('/:Client_ID/hs/:id', function (req, res, next) {
 })
 
 router.put('/:Client_ID/hs/', function (req, res, next) {
-
+    console.error('PUT ------>1');
     const schema = Joi.object().keys({
         HsCode: Joi.string(),
         Description: Joi.string().required(),
@@ -64,9 +64,10 @@ router.put('/:Client_ID/hs/', function (req, res, next) {
         MType: Joi.number(),
         Countries: Joi.array().items(Joi.string())
     })
-
+    console.error('PUT ------>1');
     Joi.validate(req.body, schema, (err, results) => {
         if (err) {
+            console.error(err);
             return res.status(400).send;
         }
         let hs = req.body;
@@ -100,10 +101,8 @@ router.put('/:Client_ID/hs/', function (req, res, next) {
                     }
                 });
             }
-            return res.send(results);
+            return res.status(200).send(results);
         });
-
-        return res.status(400).send;
     });
 })
 
