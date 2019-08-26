@@ -4,139 +4,127 @@ var dbConnection = require('./database')
 const Joi = require('@hapi/joi');
 
 
-router.get('/:Client_ID/incoterm/', function(req, res) {
-    
-    dbConnection.query('SELECT * FROM BRIDGE.Incoterms WHERE Client_ID = ?' .req.params.Client_ID, function(error, results, fields){
-        if (error) return next (error);
-        if (!results|| results.length) return res.status(404).send();
-        return res.send(results)
-    })
-})
+router.get('/:Client_ID/incoterm/', function (req, res, next) {
 
-router.put ('/:Client_ID/incoterm/', function(req, res, next){
-    const schema = Joi.object().keys({
-        Client_ID : Joi.string().alphanum().min(3).max(36).required()
-
-    })
-
-    Joi.validate(req.body, schema, (err, results) => {
-        if (err){
-            return res.status(400).send;
-
-        }
-
-        let incoterm = req.body;
-        dbConnection.querry("UPDATE BRIDGE.Incoterms SET Client_ID = ?", [Incoterms.Client_ID] , function(error,results, fields) {
-
-            if (error) return next.body;
-            if (!results|| results.affetedRows ==0) res.status(404).send();
-            return res.status(results);
-
-        })
-    })
-})
-
-router.post('/:Client_ID/incoterm/', function(req,res){
-    const schema = Joi.object().keys({
-        Client_ID: Joi.string().alphanum().min(3).max(30).required() 
-    })
-
-    Joi.validate(req.body, schema, (err, result)=> {
-        if (err){
-            return res.status(400).send();
-
-        }
-         
-        let incoterm = req.body;
-        dbConnection.query("INSERT INTO BRIDGE.Incoterms SET ID = Client_ID = ?". req.body, function(error, results, fields){
-            if (error) return next(error);
-            return res.status(404).send();
-        })
-    })
-})
-
-router.get('/incoterm', function(req, res, next) {
-
-    dbConnection.query('SELECT * FROM BRIDGE.Incoterms WHERE Status = 1 ', function(error, results, fields) {
-
+    dbConnection.query('SELECT * FROM Incoterms WHERE Client_ID = ?', [req.params.Client_ID], function (error, results, fields) {
         if (error) return next(error);
 
-        if (!results || results.length == 0) return res.status(404).send()
-
-        return res.send(results)
-    });
-});
-
-router.get('/incoterm/:id', function(req, res, next) {
-
-    let incoterm_id = req.params.id;
-
-    dbConnection.query('SELECT * FROM BRIDGE.Incoterms where Status = 1 and ID = ?', incoterm_id, function(error, results, fields) {
-
-        if (error) return next(error);
-
-        if (!results || results.length == 0) return res.status(404).send()
+        if (!results || results.length == 0) return res.status(404).send();
 
         return res.send(results);
+    })
+})
+
+
+router.get('/:Client_ID/incoterm/:id', function (req, res, next) {
+
+    dbConnection.query('SELECT * FROM Incoterms where Client_ID = ? AND ID = ?', [req.params.Client_ID, req.params.id], function (error, results, fields) {
+
+        if (error) return next(error);
+
+        if (!results || results.length == 0) return res.status(404).send()
+
+        return res.send(results[0]);
 
     });
 });
 
-router.post('/incoterm', function(req, res, next) {
-
+router.put('/:Client_ID/incoterm/', function (req, res, next) {
     const schema = Joi.object().keys({
-        Incorterm: Joi.string().min(3).max(30).required(),
-        Description: Joi.string().trim().max(60),
-        Status: Joi.number().integer().min(0).max(9).required()
+        Client_ID: Joi.string().min(3).max(37).required(),
+        ID: Joi.string().min(3).max(37).required(),
+        Incoterm: Joi.string().required(),
+        Description:  Joi.string().required(),
+        Freight:  Joi.string().required(),
+        Insurance:  Joi.string().required(),
+        Status:  Joi.string().required(),
+        Created_By:  Joi.string().allow(null)
     })
 
-    Joi.validate(req.body, schema, (err, result) => {
+    let userID = req.header('InitiatedBy')
+        let ClientID = req.header('Client_ID')
 
-        console.error(err);
-
-        if (err) {
-            return res.status(400).send();
+        var intercom = {
+            ID: req.body.ID,
+            Incoterm: req.body.Incorterm,
+            Description: req.body.Description,
+            Freight: req.body.Freight,
+            Insurance: req.body.Insurance,
+            Status: req.body.Status,
+            Client_ID: ClientID,
+            Created_By: userID
         }
-        dbConnection.query("INSERT INTO BRIDGE.Incoterms SET ID = uuid(), ? ", req.body, function(error, results, fields) {
+
+    Joi.validate(intercom, schema, (err, results) => {
+        if (err) {
+            return res.status(400).send;
+        }
+
+        
+        dbConnection.querry("UPDATE Incoterms SET ?", intercom, function (error, results, fields) {
 
             if (error) return next(error);
+            if (!results || results.affetedRows == 0) res.status(404).send();
+            return res.status(200).status(results);
 
-            return res.status(201).send();
-        });
-    });
-});
+        })
+    })
+})
 
-router.put('/incoterm', function(req, res) {
-
-    let incoterm = req.body;
-
+router.post('/:Client_ID/incoterm/', function (req, res) {
+console.error('-----> 1');
     const schema = Joi.object().keys({
-        ID: Joi.string().trim().required(),
-        Incorterm: Joi.string().min(3).max(30).required(),
-        Description: Joi.string().trim().max(60),
-        Status: Joi.number().integer().min(0).max(9)
+        Client_ID: Joi.string().min(3).max(37).required(),
+        ID: Joi.string().min(3).max(37).allow(null),
+        Incoterm: Joi.string().required(),
+        Description:  Joi.string().required(),
+        Freight:  Joi.string().required(),
+        Insurance:  Joi.string().required(),
+        Status:  Joi.string().required(),
+        Created_By:  Joi.string().allow(null)
     })
 
-    Joi.validate(incoterm, schema, (err, result) => {
+    const uuidv4 = require('uuid/v4')
+    let userID = req.header('InitiatedBy')
+    let ClientID = req.header('Client_ID')
+    let incoterm_ID = uuidv4();
 
+    var intercom = {
+        ID: incoterm_ID,
+        Incoterm: req.body.Incorterm,
+        Description: req.body.Description,
+        Freight: req.body.Freight,
+        Insurance: req.body.Insurance,
+        Status: req.body.Status,
+        Client_ID: ClientID,
+        Created_By: userID
+    }
+    console.error('-----> 2');
+    Joi.validate(intercom, schema, (err, result) => {
+        console.error('-----> 3');
         if (err) {
+            console.error(err);
             return res.status(400).send();
         }
 
-        dbConnection.query("UPDATE Incoterms SET Incorterm = ?, Description = ?, Status = ? WHERE ID = ?", [incoterm.Incorterm, incoterm.Description, incoterm.Status, incoterm.ID], function(error, results, fields) {
-
+        dbConnection.query("INSERT INTO Incoterms SET ?",intercom, function (error, results, fields) {
+            console.error('-----> 4');
             if (error) return next(error);
+            if (!results || results.affetedRows == 0) res.status(404).send();
 
-            if (!results || results.affectedRows == 0) return res.status(404).send();
+            console.error('-----> 5');
+             return res.status(201).send({
+                    error: false,
+                    data: results,
+                    message: 'New Incoterms types has been created successfully.'
+                });
+        })
+    })
+})
 
-            return res.send(results);
-        });
-    });
-});
+router.delete('/incoterm/:id', function (req, res, next) {
 
-router.delete('/incoterm/:id', function(req, res, next) {
-
-    dbConnection.query("UPDATE BRIDGE.Incoterms SET Status = 0  WHERE ID = ?", req.params.id, function(error, results, fields) {
+    dbConnection.query("UPDATE Incoterms SET Status = 0  WHERE ID = ?", req.params.id, function (error, results, fields) {
 
         if (error) return next(error);
 
