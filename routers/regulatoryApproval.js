@@ -19,7 +19,34 @@ router.get('/:Client_ID/regapproval/:id', function (req, res) {
 
         if (!results || results.length == 0) return res.status(404).send()
 
-        return res.send(results);
+                            var regApproval = {
+                                ID: results[0].ID,
+                                Client_ID: results[0].Client_ID,
+                                Institute: results[0].Institute,
+                                TestName: results[0].TestName,
+                                ReleaseTimeInDays: results[0].ReleaseTimeInDays,
+                                SampleRequired: results[0].SampleRequired,
+                                AverageReleaseTime: results[0].AverageReleaseTime,
+                                ObtainingStage: results[0].ObtainingStage,
+                                IsActive: results[0].IsActive,
+                                Parent_ID: results[0].Parent_ID,
+                                CreatedBy: results[0].CreatedBy,
+                                CreatedTime: results[0].CreatedTime,
+                                Attachments: []}
+  
+
+        dbConnection.query('SELECT RegulatoryAttachments.* FROM RegulatoryAttachments INNER JOIN RegulatoryApproval ON RegulatoryAttachments.RegulatoryApproval_ID = RegulatoryApproval.ID WHERE RegulatoryApproval.Client_ID = ? AND RegulatoryApproval.ID = ?', [req.params.Client_ID, req.params.id], function (error, attachmentResults, fields) {
+
+            if (error) return next(error);
+            if (!attachmentResults || attachmentResults.length == 0) return res.send(regApproval);
+
+            attachmentResults.forEach(extract);
+
+            function extract(item, index) {
+                regApproval.Attachments.push({ ID: item.ID, document: item.DocumentName, Description: item.Description, mandatory: item.Mandatory });
+            }
+            return res.send(regApproval)
+        })
     });
 });
 

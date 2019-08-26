@@ -21,16 +21,30 @@ router.get('/:Client_ID/tradeagreement/:id', function (req, res, next) {
 
         if (error) return next(error);
         if (!results || results.length == 0) return res.status(404).send();
-        return res.send(results)
+      console.error(results);
+        var tradeAgreement = { ID: results[0].ID,
+                                Agreement: results[0].Agreement,
+                                Description: results[0].Description,
+                                Attachment: results[0].Attachment,
+                                Countries: []
+                                }
+        dbConnection.query('SELECT TradeAgreementCountries.* FROM TradeAgreementCountries INNER JOIN TradeAgreements ON TradeAgreementCountries.TradeAgreement_ID = TradeAgreements.ID WHERE TradeAgreements.Client_ID = ? AND TradeAgreements.ID = ?', [req.params.Client_ID, req.params.id], function (error, countryResults, fields) {
+
+            if (error) return next(error);
+            if (!countryResults || countryResults.length == 0) return res.send(tradeAgreement);
+
+            countryResults.forEach(extract);
+
+            function extract(item, index) {
+                tradeAgreement.Countries.push(item.Country_ID);
+            }
+            return res.send(tradeAgreement)
+        })
     });
 
 });
 
 router.post('/:Client_ID/tradeagreement/', function (req, res, next) {
-
-    let userID = req.header('InitiatedBy')
-    let Client_ID = req.header('Client_ID')
-
 
     var agreement = {
         Client_ID: Client_ID,
@@ -52,9 +66,10 @@ router.post('/:Client_ID/tradeagreement/', function (req, res, next) {
 
     }
     let userID = req.header('InitiatedBy')
+    let Client_ID = req.header('Client_ID')
     agreementType.CreatedBy = userID;
 
-
+    let Client_ID = req.header('Client_ID')
     dbConnection.query("INSERT INTO TradeAgreements SET ? ", agreement, function (error, results, fields) {
         if (error) {
             res.status(500).send(error);
@@ -99,7 +114,6 @@ router.put('/:Client_ID/tradeagreement/', function (req, res, next) {
     let ParentID = req.body.ID;
 
     let hs = req.body;
-    let userID = req.header('InitiatedBy')
     let Client_ID = req.header('Client_ID')
     let Countries = req.body.Countries;
 
