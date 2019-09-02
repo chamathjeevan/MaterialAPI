@@ -47,7 +47,7 @@ app.use((error, req, res, next) => {
     if (res.headersSent) {
         return next(err)
     }
-    res.status(500).send('INTERNAL SERVER ERROR !')
+    res.status(500).send();
   });
 // set port
 app.listen(3010, function() {

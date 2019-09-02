@@ -21,7 +21,6 @@ router.get('/:Client_ID/tradeagreement/:id', function (req, res, next) {
 
         if (error) return next(error);
         if (!results || results.length == 0) return res.status(404).send();
-      console.error(results);
         var tradeAgreement = { ID: results[0].ID,
                                 Agreement: results[0].Agreement,
                                 Description: results[0].Description,

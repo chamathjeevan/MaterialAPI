@@ -1,334 +1,329 @@
 var express = require('express');
 const router = express.Router();
-var dbConnection = require('./database')
+const dbConnection = require('./database')
 const Joi = require('@hapi/joi');
+const { HTTP_STATUS } = require('./constents');
+
+const schema = Joi.object().keys({
+    ID: Joi.string().min(2).max(36).required(),
+    Client_ID: Joi.string().max(36).required(),
+    Name: Joi.string().max(60).required(),
+    MaterialType_ID: Joi.number().integer().required(),
+    Origin: Joi.string().max(3).required(),
+    Measures_ID: Joi.string().max(4).required(),
+    HsCodes_ID: Joi.string().max(20).required(),
+    IsApprovalRequired: Joi.boolean(),
+    CargoType: Joi.string().valid('General', 'Dangerous Good'),
+    IsDeleted: Joi.boolean(),
+    IsActive: Joi.boolean(),
+    IsBOI: Joi.boolean(),
+    Parent_ID: Joi.string().max(36).allow(null).allow(''),
+    Supplier_ID: Joi.string().max(36).required(),
+    CreatedBy: Joi.string().max(36).required(),
+    Priority: Joi.string().valid('High', 'Medium', 'Low'),
+    Agreements: Joi.array().items(Joi.number().integer()),
+    Approvals: Joi.array().items(Joi.string())
+})
 
 router.get('/:Client_ID/material/', function (req, res, next) {
-    dbConnection.query('SELECT * FROM Materials WHERE  IsActive = 1', function (error, results, fields) {
+    dbConnection.query('SELECT * FROM Materials WHERE  Client_ID = ?', req.params.Client_ID, function (error, results, fields) {
         if (error) return next(error);
-        if (!results || results.length == 0) return res.status(404).send();
+        if (!results || results.length == 0) return res.status(HTTP_STATUS.NOT_FOUND).send();
         return res.send(results)
     })
 })
 
 router.get('/:Client_ID/material/:id', function (req, res, next) {
-    dbConnection.query('SELECT * FROM Materials WHERE  IsActive = 1  AND ID = ?', req.params.id, function (error, results, fields) {
+    dbConnection.query('SELECT * FROM Materials WHERE ID = ? AND Client_ID = ?', [req.params.id, req.params.Client_ID], function (error, results, fields) {
         if (error) return next(error);
-        if (!results || results.length == 0) return res.status(404).send();
-        return res.send(results)
+        if (!results || results.length == 0) return res.status(HTTP_STATUS.NOT_FOUND).send()
+        var result = results[0];
+        var isApprovalsDone = false;
+        var isAgreementsDone = false;
+
+        var material = {
+            ID: result.ID,
+            Client_ID: result.Client_ID,
+            Name: result.Name,
+            MaterialType_ID: result.MaterialType_ID,
+            Origin: result.Origin,
+            Measures_ID: result.Measures_ID,
+            HsCodes_ID: result.HsCodes_ID,
+            IsApprovalRequired: result.IsApprovalRequired,
+            CargoType: result.CargoType,
+            IsDeleted: result.IsDeleted,
+            IsActive: result.IsActive,
+            IsBOI: result.IsBOI,
+            Parent_ID: result.Parent_ID,
+            Supplier_ID: result.Supplier_ID,
+            CreatedBy: result.CreatedBy,
+            Priority: result.Priority,
+            Approvals: [],
+            Agreements: []
+        };
+
+        dbConnection.query('SELECT RegulatoryApproval_ID FROM MaterialApprovals WHERE Material_ID =  ?', [req.params.id], function (error, approvals, fields) {
+            if (approvals && approvals.length > 0) {
+
+                approvals.forEach(extract);
+
+                function extract(item, index) {
+                    material.Approvals.push(item.RegulatoryApproval_ID);
+                }
+            }
+            isApprovalsDone = true;
+
+            if (isApprovalsDone && isAgreementsDone) return res.send(material)
+        })
+        var arrAgreements = new Array();
+        dbConnection.query('SELECT Agreement_ID FROM MaterialAgreements WHERE Material_ID =  ?', [req.params.id], function (error, agreements, fields) {
+            if (agreements && agreements.length !== 0) {
+
+                agreements.forEach(extract);
+
+                function extract(item, index) {
+                    material.Agreements.push(item.Agreement_ID);
+                }
+            }
+            isAgreementsDone = true;
+
+            if (isApprovalsDone && isAgreementsDone) return res.send(material)
+        })
     })
 })
 
-router.post('/:Client_ID/material/', function (req, res) {
+router.post('/:Client_ID/material/', function (req, res, next) {
+
+    if (!req.body) return res.status(HTTP_STATUS.BAD_REQUEST).send();
+
     const uuidv4 = require('uuid/v4')
-    if (!req.body) {
-        res.status(400).send({
-            error: true,
-            message: 'Please provide material'
-        });
-        res.end();
-        return
-    }
+    let USER_ID = req.header('InitiatedBy')
+    let Client_ID = req.header('Client_ID')
+    let MATERIAL_ID = uuidv4();
 
-    var materialId = uuidv4();
+    req.body.CreatedBy = USER_ID;
 
-    let material = {
-        ID: materialId,
-        ItemName: req.body.ItemName,
-        ItemType: req.body.ItemType,
-        ItemOrigin: req.body.ItemOrigin,
-        UnitOfMeasure_ID: req.body.UnitOfMeasure_ID,
-        HS_HsCode: req.body.HS_HsCode,
-        RequiredApprovalTypes: req.body.RequiredApprovalTypes,
-        CargoType: req.body.CargoType,
-        Trade_Agreement_Type_ID: req.body.Trade_Agreement_Type_ID,
-        IsDeleted: false,
-        IsActive: true,
-        IsBOI: req.body.IsBOI,
-        Parent_ID: null,
-        Supplier_ID: req.body.Supplier_ID,
-        CreatedBy: req.body.CreatedBy
-    }
+    Joi.validate(req.body, schema, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res.status(HTTP_STATUS.BAD_REQUEST).send(err);
+        }
 
-    console.error(material)
-    let materialClients = {
-        Material_ID: materialId,
-        Client_ID: req.body.Client_ID
-    }
+        var material = {
+            ID: MATERIAL_ID,
+            Client_ID: Client_ID,
+            Name: req.body.Name,
+            MaterialType_ID: req.body.MaterialType_ID,
+            Origin: req.body.Origin,
+            Measures_ID: req.body.Measures_ID,
+            HsCodes_ID: req.body.HsCodes_ID,
+            IsApprovalRequired: req.body.IsApprovalRequired,
+            CargoType: req.body.CargoType,
+            IsDeleted: req.body.IsDeleted,
+            IsActive: req.body.IsActive,
+            IsBOI: req.body.IsBOI,
+            Parent_ID: null,
+            Supplier_ID: req.body.Supplier_ID,
+            CreatedBy: USER_ID,
+            Priority: req.body.Priority
+        }
 
-    let materialAgreements = {
-        Material_ID: materialId,
-        Agreement_ID: req.body.Trade_Agreement_Type_ID
-    }
+        dbConnection.beginTransaction(function (err) {
 
-    let materialApprovals = {
-        Material_ID: materialId,
-        Approval_ID: req.body.RequiredApprovalTypes
-    }
+            if (err) return next(err);
 
-    let userID = req.header('InitiatedBy')
-    //material.CreatedBy = userID;
-    //---------------------
-
-    /* Begin transaction */
-    dbConnection.beginTransaction(function (err) {
-        if (err) { throw err; }
-        dbConnection.query("INSERT INTO Materials SET ? ", material, function (err, result) {
-            if (err) {
-                dbConnection.rollback(function () {
-                    throw err;
-                });
-            }
-
-            dbConnection.query('INSERT INTO MaterialClients SET ?', materialClients, function (err, result) {
-                if (err) {
+            dbConnection.query("INSERT INTO Materials SET ? ", material, function (errMaterials, result) {
+                if (errMaterials) {
                     dbConnection.rollback(function () {
-                        throw err;
+                        console.error(errMaterials);
+                        return next(errMaterials);
                     });
                 }
-
-                dbConnection.query('INSERT INTO MaterialAgreements SET ?', materialAgreements, function (err, result) {
-                    if (err) {
-                        dbConnection.rollback(function () {
-                            throw err;
-                        });
+                // ------------- INSERT AGREEMENTS ---------
+                if (req.body.Agreements && req.body.Agreements.length > 0) {
+                    var sqlAgreements = "";
+                    var agreementsData = []
+                    const agreementsTemplate = 'INSERT INTO MaterialAgreements SET ? '
+                    for (i = 0; i < req.body.Agreements.length; i++) {
+                        sqlAgreements += agreementsTemplate;
+                        if (i !== (req.body.Agreements.length - 1)) {
+                            sqlAgreements += '; ';
+                        }
+                        agreementsData.push({ Material_ID: MATERIAL_ID, Agreement_ID: req.body.Agreements[i] });
                     }
 
-                    dbConnection.query('INSERT INTO MaterialApprovals SET ?', materialApprovals, function (err, result) {
-                        if (err) {
+                    dbConnection.query(sqlAgreements, agreementsData, function (errAgreement, result) {
+                        if (errAgreement) {
                             dbConnection.rollback(function () {
-                                throw err;
+                                console.error(errAgreement);
+                                return next(errAgreement);
                             });
                         }
-
-                        dbConnection.commit(function (err) {
-                            if (err) {
-                                dbConnection.rollback(function () {
-                                    throw err;
-                                });
-                            }
-                            res.status(201).send({
-                                error: false,
-                                data: materialId,
-                                message: materialId
-                            })
-
-                            res.end();
-                            return
-                        });
                     });
+                }
+                // ------------- INSERT APPROVAL ---------
+                if (req.body.Approvals && req.body.Approvals.length > 0) {
+                    var dataApprovals = []
+                    const TemplateApproval = 'INSERT INTO MaterialApprovals SET ? '
+                    var sqlApprovals = "";
+                    for (i = 0; i < req.body.Approvals.length; i++) {
+                        sqlApprovals += TemplateApproval;
+                        if (i !== (req.body.Approvals.length - 1)) {
+                            sqlApprovals += '; ';
+                        }
+                        dataApprovals.push({ Material_ID: MATERIAL_ID, RegulatoryApproval_ID: req.body.Approvals[i] });;
+                    }
+                    dbConnection.query(sqlApprovals, dataApprovals, function (errApprovals, result) {
+                        if (errApprovals) {
+                            dbConnection.rollback(function () {
+                                console.error(errApprovals);
+                                return next(errApprovals);
+                            });
+                        }
+                    });
+                }
+                dbConnection.commit(function (commitError) {
+                    if (commitError) {
+                        dbConnection.rollback(function () {
+                            console.error(commitError);
+                            return next(commitError);
+                        });
+                    }
+                    return res.status(HTTP_STATUS.CREATED).send({ error: false, data: MATERIAL_ID, message: MATERIAL_ID })
                 });
             });
         });
     });
 });
 
-router.put('/:Client_ID/material/', function (req, res) {
+
+router.put('/:Client_ID/material/', function (req, res, next) {
+
+    if (!req.body) return res.status(HTTP_STATUS.BAD_REQUEST).send();
+
     const uuidv4 = require('uuid/v4')
-    let material = req.body;
-    let ParentID = material.ID;
+    const USER_ID = req.header('InitiatedBy')
+    const Client_ID = req.header('Client_ID')
+    const MATERIAL_ID = uuidv4();
+    const PARENT_ID = req.body.ID;
 
-    if (!material) {
-        res.status(400).send({
-            error: true,
-            message: 'Please provide material'
-        });
-        res.end();
-        return
-    }
+    req.body.CreatedBy = USER_ID;
 
-    console.error('-------------------------');
-    console.error(material);
-    console.error('-------------------------');
-    var materialId = uuidv4();
-    /* Begin transaction */
-    dbConnection.beginTransaction(function (err) {
+    Joi.validate(req.body, schema, (err, results) => {
         if (err) {
-            console.error('1')
-            res.status(500).send(error);
-                    res.end();
-                    return
-            ;
+            console.error(err);
+            return res.status(HTTP_STATUS.BAD_REQUEST).send(err);
         }
-        console.error('2');
-        dbConnection.query("UPDATE Materials SET  IsActive = 0 WHERE ID = ? ", ParentID, function (error, results, fields) {
-            if (error) {
-                console.error('3');
-                dbConnection.rollback(function () {
 
-                    res.status(500).send(error);
-                    res.end();
-                    return
-                });
-            }
-            console.error('4');
-            dbConnection.query("DELETE  FROM MaterialApprovals WHERE Material_ID = ? ", ParentID, function (error, results, fields) {
-                if (error) {
+
+        var material = {
+            ID: MATERIAL_ID,
+            Client_ID: Client_ID,
+            Name: req.body.Name,
+            MaterialType_ID: req.body.MaterialType_ID,
+            Origin: req.body.Origin,
+            Measures_ID: req.body.Measures_ID,
+            HsCodes_ID: req.body.HsCodes_ID,
+            IsApprovalRequired: req.body.IsApprovalRequired,
+            CargoType: req.body.CargoType,
+            IsDeleted: req.body.IsDeleted,
+            IsActive: req.body.IsActive,
+            IsBOI: req.body.IsBOI,
+            Parent_ID: PARENT_ID,
+            Supplier_ID: req.body.Supplier_ID,
+            CreatedBy: USER_ID,
+            Priority: req.body.Priority
+        }
+
+        dbConnection.beginTransaction(function (err) {
+
+            if (err) return next(err);
+            dbConnection.query("UPDATE Materials SET  IsActive = 0 WHERE ID = ? AND Client_ID = ? ", [PARENT_ID, req.params.Client_ID], function (errorUpdate, results, fields) {
+                if (errorUpdate) {
                     dbConnection.rollback(function () {
-                        console.error('5');
-                        res.status(500).send(error);
-                        res.end();
-                        return
+                        console.error(errorUpdate);
+                        return next(errorUpdate);
                     });
                 }
-                console.error('5');
-                dbConnection.query("DELETE  FROM MaterialClients WHERE Material_ID = ? ", ParentID, function (error, results, fields) {
-                    if (error) {
-                        console.error('6');
+                dbConnection.query("INSERT INTO Materials SET ? ", material, function (errMaterials, result) {
+                    if (errMaterials) {
                         dbConnection.rollback(function () {
-                            console.error('7');
-                            res.status(500).send(error);
-                            res.end();
-                            return
+                            console.error(errMaterials);
+                            return next(errMaterials);
                         });
                     }
-                    console.error('8');
-                    dbConnection.query("DELETE  FROM MaterialAgreements WHERE Material_ID = ? ", ParentID, function (error, results, fields) {
-                        console.error('9');
-                        if (error) {
-                            console.error('10');
-                            dbConnection.rollback(function () {
-
-                                res.status(500).send(error);
-                                res.end();
-                                return
-                            });
-                        }
-                       
-                        let copyMaterial = {
-                            ID: materialId,
-                            ItemName: material.ItemName,
-                            ItemType: material.ItemType,
-                            ItemOrigin: material.ItemOrigin,
-                            UnitOfMeasure_ID: material.UnitOfMeasure_ID,
-                            HS_HsCode: material.HS_HsCode,
-                            RequiredApprovalTypes: material.RequiredApprovalTypes,
-                            CargoType: material.CargoType,
-                            Trade_Agreement_Type_ID: material.Trade_Agreement_Type_ID,
-                            IsDeleted: false,
-                            IsActive: true,
-                            IsBOI: material.IsBOI,
-                            Parent_ID: ParentID,
-                            Supplier_ID: material.Supplier_ID,
-                            CreatedBy: material.CreatedBy
+                    // ------------- INSERT AGREEMENTS ---------
+                    if (req.body.Agreements && req.body.Agreements.length > 0) {
+                        var sqlAgreements = "";
+                        var agreementsData = []
+                        const agreementsTemplate = 'INSERT INTO MaterialAgreements SET ? '
+                        for (i = 0; i < req.body.Agreements.length; i++) {
+                            sqlAgreements += agreementsTemplate;
+                            if (i !== (req.body.Agreements.length - 1)) {
+                                sqlAgreements += '; ';
+                            }
+                            agreementsData.push({ Material_ID: MATERIAL_ID, Agreement_ID: req.body.Agreements[i] });
                         }
 
-                        let materialClients = {
-                            Material_ID: materialId,
-                            Client_ID: req.body.Client_ID
-                        }
-
-                        let materialAgreements = {
-                            Material_ID: materialId,
-                            Agreement_ID: req.body.Trade_Agreement_Type_ID
-                        }
-
-                        let materialApprovals = {
-                            Material_ID: materialId,
-                            Approval_ID: req.body.RequiredApprovalTypes
-                        }
-                        console.error('11');
-                        dbConnection.query("INSERT INTO Materials SET ? ", copyMaterial, function (error, results, fields) {
-
-                            if (error) {
+                        dbConnection.query(sqlAgreements, agreementsData, function (errAgreement, result) {
+                            if (errAgreement) {
                                 dbConnection.rollback(function () {
-                                    res.status(500).send(error);
-                                    res.end();
-                                    return
+                                    console.error(errAgreement);
+                                    return next(errAgreement);
                                 });
                             }
-
-                            dbConnection.query('INSERT INTO MaterialClients SET ?', materialClients, function (error, result) {
-                                if (error) {
-                                    dbConnection.rollback(function () {
-                                        res.status(500).send(error);
-                                        res.end();
-                                        return
-                                    });
-                                }
-
-                                dbConnection.query('INSERT INTO MaterialAgreements SET ?', materialAgreements, function (error, result) {
-                                    if (error) {
-                                        dbConnection.rollback(function () {
-                                            res.status(500).send(error);
-                                            res.end();
-                                            return
-                                        });
-                                    }
-
-                                    dbConnection.query('INSERT INTO MaterialApprovals SET ?', materialApprovals, function (error, result) {
-                                        if (error) {
-                                            dbConnection.rollback(function () {
-                                                res.status(500).send(error);
-                                                res.end();
-                                                return
-                                            });
-                                        }
-                                        console.error('12');
-                                        dbConnection.commit(function (error) {
-                                            console.error(error);
-                                            console.error('13');
-                                            if (error) {
-                                                console.error('14');
-                                                dbConnection.rollback(function () {
-                                                    console.error('15');
-                                                    res.status(500).send(error);
-                                                    res.end();
-                                                    return
-                                                });
-                                            }
-                                            console.error('16');
-                                  
-                                           /* res.status(200).send({
-                                                error: false,
-                                                data: null,
-                                                message: 'Material has been updated successfully.'
-                                            })
-                                            */
-                                            console.error('17');
-                                            res.end();
-                                            console.error('18');
-                                            return
-                                        });
-                                    });
-                                });
-                            });
                         });
+                    }
+                    // ------------- INSERT APPROVAL ---------
+                    if (req.body.Approvals && req.body.Approvals.length > 0) {
+                        var dataApprovals = []
+                        const TemplateApproval = 'INSERT INTO MaterialApprovals SET ? '
+                        var sqlApprovals = "";
+                        for (i = 0; i < req.body.Approvals.length; i++) {
+                            sqlApprovals += TemplateApproval;
+                            if (i !== (req.body.Approvals.length - 1)) {
+                                sqlApprovals += '; ';
+                            }
+                            dataApprovals.push({ Material_ID: MATERIAL_ID, RegulatoryApproval_ID: req.body.Approvals[i] });;
+                        }
+                        dbConnection.query(sqlApprovals, dataApprovals, function (errApprovals, result) {
+                            if (errApprovals) {
+                                dbConnection.rollback(function () {
+                                    console.error(errApprovals);
+                                    return next(errApprovals);
+                                });
+                            }
+                        });
+                    }
+                    dbConnection.commit(function (commitError) {
+                        if (commitError) {
+                            dbConnection.rollback(function () {
+                                console.error(commitError);
+                                return next(commitError);
+                            });
+                        }
+                        return res.status(HTTP_STATUS.SUCCESS).send({ error: false, data: MATERIAL_ID, message: MATERIAL_ID })
                     });
                 });
             });
         });
     });
-    /* End transaction */
-
-
 });
 
 router.delete('/:Client_ID/material/:id', function (req, res) {
 
-    let material_id = req.params.id;
-
-    dbConnection.query("UPDATE Materials SET  IsDeleted = 1 WHERE ID = ?", [material_id], function (error, results, fields) {
+    dbConnection.query("UPDATE Materials SET IsDeleted = 0, IsActive = 0 WHERE ID = ? AND Client_ID = ? ", [req.params.id, req.params.Client_ID], function (error, results, fields) {
 
         if (error) {
-            res.status(500).send(error);
+            return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).send(error);
         } else {
 
             if (!results || results.length == 0) {
-                res.status(404).send({
-                    error: false,
-                    message: 'No records found'
-                });
+                return res.status(HTTP_STATUS.NOT_FOUND).send();
             } else {
-                res.send({
-                    error: false,
-                    data: results,
-                    message: 'Material has been deleted successfully.'
-                });
+                return res.status(HTTP_STATUS.SUCCESS).send();
             }
         }
-        res.end();
-        return
     });
 });
 
