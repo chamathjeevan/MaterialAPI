@@ -23,6 +23,8 @@ const schema = Joi.object().keys({
     Priority: Joi.string().valid('High', 'Medium', 'Low'),
     Agreements: Joi.array().items(Joi.number().integer()),
     Approvals: Joi.array().items(Joi.string())
+
+   // is deleted navatha use wena 1 navattanna. full delete wenne na
 })
 
 router.get('/:Client_ID/material/', function (req, res, next) {
