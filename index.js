@@ -7,6 +7,8 @@ app.use(bodyParser.urlencoded({
     extended: true
 }));
 app.use(cors())
+
+
 const materialRoutes = require('./routers/materials.js')
 app.use(materialRoutes);
 
@@ -40,12 +42,21 @@ app.use(recepieMapRoutes);
 const taxMapRoutes = require('./routers/taxMap')
 app.use(taxMapRoutes);
 
+const bTypeRoutes = require('./routers/bType')
+app.use(bTypeRoutes);
+
+//const stakeholders = require('./routers/stakeholders')
+//app.use(stakeholders);
+
+const stakeholder = require('./routers/stakeholder')
+app.use(stakeholder);
+
 app.use((error, req, res, next) => {
     console.error(error)
     if (res.headersSent) {
         return next(err)
     }
-    res.status(500).send('INTERNAL SERVER ERROR !')
+    res.status(500).send();
   });
 // set port
 app.listen(3010, function() {

@@ -5,7 +5,8 @@ var dbConnection = mysql.createConnection({
     port: '3306',
     user: 'rebirth',
     password: '9ijnBGT5',
-    database: 'BRIDGE'
+    database: 'BRIDGE',
+    multipleStatements:true
 });
 
 dbConnection.connect(function (err) {
