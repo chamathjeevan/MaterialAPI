@@ -91,7 +91,7 @@ router.post('/:Client_ID/regapproval', function (req, res) {
                 res.status(404).send();
             } else {
                 if (attachments && attachments.length > 0) {
-
+                    //--1
                     for (var k = 0; k < attachments.length; k++) {
 
                         let attachment = {
@@ -107,6 +107,7 @@ router.post('/:Client_ID/regapproval', function (req, res) {
                             }
                         });
                     }
+                    //--1
                   return res.status(201).send({
                         error: false,
                         data: results,
